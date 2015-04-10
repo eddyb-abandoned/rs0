@@ -47,10 +47,10 @@ SECTION .text
 ; TODO check stack bounds
 %macro vm.push_ 2
     sub vm. %+ %1 %+ P, 4
-    mov [vm. %+ %1 %+ P], %2
+    mov [vm. %+ %1 %+ P], dword %2
 %endmacro
 %macro vm.pop_ 2
-    mov %2, [vm. %+ %1 %+ P]
+    mov dword %2, [vm. %+ %1 %+ P]
     add vm. %+ %1 %+ P, 4
 %endmacro
 
@@ -79,40 +79,42 @@ op.lit32:
     jmp vm.loop
 
 op.call:
-    S.pop eax ; target
-    cmp eax, 0
-    jl op.call.builtin
-
     R.push vm.IP.32
+op.jmp:
+    S.pop eax ; target
+jmp.eax:
     mov vm.IP, vm.abs(0)
     add vm.IP, rax
+
+    cmp vm.IP.32, 0
+    jl jmp.builtin
     jmp vm.loop
 
 msg.undef_builtin: db "Undefined builtin function", 0xa
 msg.undef_builtin.len equ $ - msg.undef_builtin
 
-op.call.builtin:
-    inc eax ; 0xffff_ffff
+jmp.builtin:
+    inc vm.IP.32 ; 0xffff_ffff
     jz vm.exit
 
-    inc eax ; 0xffff_fffe
-    jnz op.call.builtin.undef
+    inc vm.IP.32 ; 0xffff_fffe
+    jnz jmp.builtin.undef
 
     S.pop edx ; len
     S.pop eax ; data
     mov rsi, vm.abs(0)
     add rsi, rax
     call vm.print
-    jmp vm.loop
+    jmp op.ret
 
-op.call.builtin.undef:
+jmp.builtin.undef:
     mov rsi, msg.undef_builtin
     mov rdx, msg.undef_builtin.len
     jmp vm.panic
 
 op.ret:
-    R.pop vm.IP.32
-    jmp vm.loop
+    R.pop eax
+    jmp jmp.eax
 
 msg.undef_op: db "Undefined instruction", 0xa
 msg.undef_op.len equ $ - msg.undef_op
@@ -155,5 +157,8 @@ _start:
     ; Initialize VM registers
     mov vm.SP, vm.abs(0xfffff000)
     mov vm.IP, vm.abs(0x00001000)
+
+    ; Prevent one too many returns.
+    R.push 0xffffffff
 
     jmp vm.loop

@@ -12,10 +12,13 @@ code.__start__: times 0x1000 db 0x00
     db 3
 %endmacro
 
-LIT addr(hello)
-LIT hello.len
-CALL 0xfffffffe
-CALL 0xffffffff
+%define RET db 4
+
+main:
+    LIT addr(hello)
+    LIT hello.len
+    CALL 0xfffffffe
+    RET
 
 hello: db "Hello World!", 0xa
 hello.len equ $ - hello
