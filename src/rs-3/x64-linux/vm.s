@@ -36,6 +36,13 @@ BITS 64
 ; 02 LIT32      S.push(imm32)
 ; 03 CALL       R.push(IP + 1), IP = S.pop()
 ; 04 RET        IP = R.pop()
+; 05 JMP        IP = S.pop()
+; 06 CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
+; 1x ALU        S.push([+, -, *, /, %, &, |, ^][op - 0x10](S.pop(), S.pop()))
+; 18 DIVREM     a = S.pop(), b = S.pop(), S.push(b / a), S.push(b % a)
+;
+; 80-BF GET     S.push(S[op & 0x3f])
+; C0-FF SET     S[op & 0x3f] = S.pop()
 ; .. UD         vm.panic("Undefined instruction")
 
 SECTION .text
@@ -61,8 +68,15 @@ SECTION .text
 %define R.push vm.push_ R,
 %define R.pop vm.pop_ R,
 
-op.table: dq op.nop, op.lit8, op.lit32, op.call, op.ret
-op.last equ 4
+op.table:
+    ; 00 - 0F
+    dq op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.ud
+    times 8 dq op.ud
+    ; 10 - 18
+    dq alu.add, alu.sub, alu.mul, alu.and, alu.or, alu.xor, op.ud, op.ud
+    dq alu.divrem
+;    times 256-5 dq op.ud
+op.last equ 0x18
 
 op.nop:
     jmp vm.loop
@@ -117,6 +131,62 @@ op.ret:
     R.pop eax
     jmp jmp.eax
 
+op.dup:
+    mov eax, [vm.SP]
+    S.push eax
+    jmp vm.loop
+
+op.cmp:
+    ; Stack: [a, b, lt, eq, gt] <- SP
+    add vm.SP, 4 * 4 ; Point SP to a
+    mov eax, [vm.SP]
+    cmp eax, [vm.SP-4] ; a, b
+    cmovl eax, [vm.SP-2*4] ; lt
+    cmove eax, [vm.SP-3*4] ; eq
+    cmovg eax, [vm.SP-4*4] ; gt
+    mov [vm.SP], eax
+    jmp vm.loop
+
+%macro op.alu 1
+    alu. %+ %1:
+        S.pop eax
+        %1 [vm.SP], eax
+        jmp vm.loop
+%endmacro
+
+op.alu add
+op.alu sub
+op.alu and
+op.alu or
+op.alu xor
+
+alu.mul:
+    S.pop eax
+    imul eax, [vm.SP]
+    mov [vm.SP], eax
+    jmp vm.loop
+
+alu.divrem:
+    mov eax, [vm.SP+4] ; dividend
+    cdq ; edx:eax = sext eax
+
+    idiv dword [vm.SP] ; divisor
+    mov [vm.SP+4], eax ; quotient
+    mov [vm.SP], edx ; remainder
+    jmp vm.loop
+
+op.getset:
+    shl bl, 2 ; CF = op & 0x40, BL = (op & 0x3f) * 4
+    jc op.set
+op.get:
+    mov eax, [vm.SP + rbx]
+    S.push eax
+    jmp vm.loop
+op.set:
+    S.pop eax
+    mov [vm.SP + rbx], eax
+    jmp vm.loop
+
 msg.undef_op: db `Undefined instruction\n`
 msg.undef_op.len equ $ - msg.undef_op
 
@@ -146,6 +216,9 @@ vm.exit:
 vm.loop:
     mov bl, [vm.IP]
     inc vm.IP
+
+    cmp bl, 0x80
+    jae op.getset
 
     cmp bl, op.last
     ja op.ud
