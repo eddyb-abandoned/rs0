@@ -79,7 +79,8 @@ op.call:
     jl op.call.builtin
 
     R.push vm.IP.32
-    lea vm.IP, [vm.abs(eax)]
+    mov vm.IP, vm.abs(0)
+    add vm.IP, rax
     jmp vm.loop
 
 msg.undef_builtin: db "Undefined builtin function", 0xa
