@@ -25,6 +25,8 @@ BITS 64
 ; R8: Data stack pointer (S.P)
 ; RSP: Return stack pointer (R.P)
 ; R9: Instruction pointer (IP)
+; RAX: General purpose temporary register
+; RBX: Byte fetch register (BL = [IP++])
 
 ; NB: The return stack is not visible within the VM memory
 
@@ -66,10 +68,9 @@ op.nop:
     jmp vm.loop
 
 op.lit8:
-    xor eax, eax
-    mov al, [vm.IP]
+    mov bl, [vm.IP]
     inc vm.IP
-    S.push eax
+    S.push ebx
     jmp vm.loop
 
 op.lit32:
@@ -143,20 +144,20 @@ vm.exit:
     jmp $
 
 vm.loop:
-    xor eax, eax
-    mov al, [vm.IP]
+    mov bl, [vm.IP]
     inc vm.IP
 
-    cmp al, op.last
+    cmp bl, op.last
     ja op.ud
 
-    jmp [op.table + eax * 8]
+    jmp [op.table + ebx * 8]
 
 GLOBAL _start
 _start:
     ; Initialize VM registers
     mov vm.SP, vm.abs(0xfffff000)
     mov vm.IP, vm.abs(0x00001000)
+    xor rbx, rbx
 
     ; Prevent one too many returns.
     R.push 0xffffffff
