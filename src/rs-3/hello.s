@@ -20,7 +20,7 @@ main:
     CALL 0xfffffffe
     RET
 
-hello: db "Hello World!", 0xa
+hello: db `Hello World!\n`
 hello.len equ $ - hello
 
 SECTION stack nobits write

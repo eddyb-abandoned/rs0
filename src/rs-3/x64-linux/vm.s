@@ -91,7 +91,7 @@ jmp.eax:
     jl jmp.builtin
     jmp vm.loop
 
-msg.undef_builtin: db "Undefined builtin function", 0xa
+msg.undef_builtin: db `Undefined builtin function\n`
 msg.undef_builtin.len equ $ - msg.undef_builtin
 
 jmp.builtin:
@@ -117,7 +117,7 @@ op.ret:
     R.pop eax
     jmp jmp.eax
 
-msg.undef_op: db "Undefined instruction", 0xa
+msg.undef_op: db `Undefined instruction\n`
 msg.undef_op.len equ $ - msg.undef_op
 
 op.ud:
