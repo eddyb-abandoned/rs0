@@ -12,16 +12,21 @@ BITS 64
 ; 0x0000_0000..0x0000_1000 Zero page
 ; 0x0000_1000..0x1000_0000 Code & read-only data
 ; 0x1000_0000..0xfff0_0000 Arena
-; 0xfff0_0000..0xffff_0000 Data stack
-; 0xffff_0000..0xffff_8000 Return stack
-; 0xffff_8000..0xffff_fffe Reserved
+; 0xfff0_0000..0xfff0_1000 Guard page
+; 0xfff0_1000..0xffff_f000 Data stack
+; 0xffff_f000..0xffff_fffe Guard page
+
+; At the end of the address space, within the upper
+; guard page, there are several builtin call targets:
 ; 0xffff_fffe vm.print(data, len)
 ; 0xffff_ffff vm.exit()
 
 ; ## Register usage
 ; R8: Data stack pointer (S.P)
-; R9: Return stack pointer (R.P)
-; R10: Instruction pointer (IP)
+; RSP: Return stack pointer (R.P)
+; R9: Instruction pointer (IP)
+
+; NB: The return stack is not visible within the VM memory
 
 ; ## Instruction set
 ; 00 NOP
@@ -34,9 +39,9 @@ BITS 64
 SECTION .text
 
 %define vm.SP r8
-%define vm.RP r9
-%define vm.IP r10
-%define vm.IP.32 r10d
+%define vm.RP rsp
+%define vm.IP r9
+%define vm.IP.32 r9d
 %define vm.abs(x) (0x100000000 + x)
 
 ; TODO check stack bounds
@@ -148,8 +153,7 @@ vm.loop:
 GLOBAL _start
 _start:
     ; Initialize VM registers
-    mov vm.SP, vm.abs(0xffff0000)
-    mov vm.RP, vm.abs(0xffff8000)
+    mov vm.SP, vm.abs(0xfffff000)
     mov vm.IP, vm.abs(0x00001000)
 
     jmp vm.loop

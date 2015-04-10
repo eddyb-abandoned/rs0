@@ -21,11 +21,11 @@ hello: db "Hello World!", 0xa
 hello.len equ $ - hello
 
 SECTION stack nobits write
-resb 0x100000
+resb 0xfe000
 
 ;$ nasm src/rs-3/x64-linux/vm.s -f elf64 -o vm.o
 ;$ nasm src/rs-3/hello.s -f elf64 -o hello.o
 ;$ ld vm.o hello.o -o hello --section-start=code=0x100000000 \
-;$                          --section-start=stack=0x1fff00000
+;$                          --section-start=stack=0x1fff01000
 ;$ ./hello
 ;  Hello World!
