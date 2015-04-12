@@ -64,6 +64,13 @@ code.__start__: times 0x1000 db 0x00
     db 0xc0 + %1
 %endmacro
 
+%macro SWAP 2 ; a, b -> b, a (for SWAP 0, 1)
+    GET %1      ; a, b       -> a, b, b
+    GET %2 + 1  ; a, b, b    -> a, b, b, a
+    SET %1 + 1  ; a, b, b, a -> a, a, b
+    SET %2      ; a, a, b    -> b, a
+%endmacro
+
 %macro DROP 0 ; a, b -> a
     GET 0 ; a, b    -> a, b, b
     SUB   ; a, b, b -> a, 0
@@ -95,9 +102,9 @@ main:
         SET 3 ; a' = b
         SET 1 ; b' = a + b
 
-        ; if i < 50 { continue }
+        ; if i < 100 { continue }
         GET 0
-        LIT 50
+        LIT 100
         JMP.LT addr(main.loop)
 
     ; print("\n")
@@ -120,44 +127,39 @@ print.dec:
     MUL
     print.dec.positive:
 
-    ; x -> 0(r), x
+    ; Leave a stop "mark" on the stack.
+    ; x -> 10, x
     GET 0 ; x -> x, x
-    LIT 0 ; x, x -> x, x, 0
-    SET 1 ; x, x, 0 -> 0, x
+    LIT 10 ; x, x -> x, x, 10
+    SET 1 ; x, x, 10 -> 10, x
 
-    print.dec.reverse_loop:
-        ; x -> x / 10, x % 10
+    ; Split each digit into a stack slot.
+    ; 10, abcd -> 10, d, c, b, a
+    print.dec.digit_loop:
+        ; x -> q = x / 10, r = x % 10
         LIT 10
         DIVREM
 
-        ; r = r * 10 + x % 10
-        GET 2 ; r
-        LIT 10
-        MUL ; r * 10
-        ADD ; r * 10 + x % 10
-        SET 1 ; r
+        ; q, r -> r, q
+        SWAP 0, 1
 
-        ; if (x / 10) != 0 { continue }
+        ; if q != 0 { continue }
         GET 0
         LIT 0
-        JMP.NE addr(print.dec.reverse_loop)
+        JMP.NE addr(print.dec.digit_loop)
     DROP
 
     print.dec.print_loop:
-        ; x -> x / 10, x % 10
-        LIT 10
-        DIVREM
-
         ; print(digits[x % 10])
         LIT addr(digits)
         ADD
         LIT 1
         CALL 0xfffffffe
 
-        ; if (x / 10) != 0 { continue }
+        ; if top < 10 { continue }
         GET 0
-        LIT 0
-        JMP.NE addr(print.dec.print_loop)
+        LIT 10
+        JMP.LT addr(print.dec.print_loop)
     DROP
     RET
 
