@@ -1,6 +1,4 @@
-SECTION code
-code.__start__: times 0x1000 db 0x00
-%define addr(x) (x - code.__start__)
+SECTION vm.code
 
 %macro LIT 1
     db 2
@@ -23,25 +21,25 @@ code.__start__: times 0x1000 db 0x00
 %endmacro
 
 %macro JMP.LT 1
-    CMP %1, addr(%%after), addr(%%after)
+    CMP %1, %%after, %%after
     JMP
     %%after:
 %endmacro
 
 %macro JMP.GT 1
-    CMP addr(%%after), addr(%%after), %1
+    CMP %%after, %%after, %1
     JMP
     %%after:
 %endmacro
 
 %macro JMP.GE 1
-    CMP addr(%%after), %1, %1
+    CMP %%after, %1, %1
     JMP
     %%after:
 %endmacro
 
 %macro JMP.NE 1
-    CMP %1, addr(%%after), %1
+    CMP %1, %%after, %1
     JMP
     %%after:
 %endmacro
@@ -84,10 +82,10 @@ main:
     main.loop:
         ; print.dec(b)
         GET 1
-        CALL addr(print.dec)
+        CALL print.dec
 
         ; print(" ")
-        LIT addr(space)
+        LIT space
         LIT 1
         CALL 0xfffffffe
 
@@ -105,10 +103,10 @@ main:
         ; if i < 100 { continue }
         GET 0
         LIT 100
-        JMP.LT addr(main.loop)
+        JMP.LT main.loop
 
     ; print("\n")
-    LIT addr(newline)
+    LIT newline
     LIT 1
     CALL 0xfffffffe
     RET
@@ -116,9 +114,9 @@ main:
 print.dec:
     GET 0
     LIT 0
-    JMP.GE addr(print.dec.positive)
+    JMP.GE print.dec.positive
     ; print("-")
-    LIT addr(minus)
+    LIT minus
     LIT 1
     CALL 0xfffffffe
 
@@ -146,12 +144,12 @@ print.dec:
         ; if q != 0 { continue }
         GET 0
         LIT 0
-        JMP.NE addr(print.dec.digit_loop)
+        JMP.NE print.dec.digit_loop
     DROP
 
     print.dec.print_loop:
         ; print(digits[x % 10])
-        LIT addr(digits)
+        LIT digits
         ADD
         LIT 1
         CALL 0xfffffffe
@@ -159,7 +157,7 @@ print.dec:
         ; if top < 10 { continue }
         GET 0
         LIT 10
-        JMP.LT addr(print.dec.print_loop)
+        JMP.LT print.dec.print_loop
     DROP
     RET
 
@@ -168,12 +166,8 @@ newline: db `\n`
 minus: db "-"
 digits: db "0123456789"
 
-SECTION stack nobits write
-resb 0xfe000
-
 ;$ nasm src/rs-3/x64-linux/vm.s -f elf64 -o vm.o
 ;$ nasm src/rs-3/fib.s -f elf64 -o fib.o
-;$ ld vm.o fib.o -o fib --section-start=code=0x100000000 \
-;$                      --section-start=stack=0x1fff01000
+;$ ld vm.o fib.o -o fib -T src/rs-3/x64-linux/link.ld -z max-page-size=0x1000
 ;$ ./fib
 ; 1 1 2 3 5 8 13 21 34 55 89 144 233 377 61 987 1597 2584 ...

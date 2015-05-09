@@ -10,7 +10,8 @@ BITS 64
 
 ; ## Memory layout
 ; 0x0000_0000..0x0000_1000 Zero page
-; 0x0000_1000..0x1000_0000 Code & read-only data
+; 0x0000_1000..0x0000_2000 VM native code
+; 0x0000_2000..0x1000_0000 Code & read-only data
 ; 0x1000_0000..0xfff0_0000 Arena
 ; 0xfff0_0000..0xfff0_1000 Guard page
 ; 0xfff0_1000..0xffff_f000 Data stack
@@ -22,11 +23,11 @@ BITS 64
 ; 0xffff_ffff vm.exit()
 
 ; ## Register usage
-; R8: Data stack pointer (S.P)
+; R8D: Data stack pointer (S.P)
 ; RSP: Return stack pointer (R.P)
-; R9: Instruction pointer (IP)
-; RAX: General purpose temporary register
-; RBX: Byte fetch register (BL = [IP++])
+; R9D: Instruction pointer (IP)
+; EAX: General purpose temporary register
+; EBX: Byte fetch register (BL = [IP++])
 
 ; NB: The return stack is not visible within the VM memory
 
@@ -45,13 +46,11 @@ BITS 64
 ; C0-FF SET     S[op & 0x3f] = S.pop()
 ; .. UD         vm.panic("Undefined instruction")
 
-SECTION .text
+SECTION vm.native exec align=16
 
-%define vm.SP r8
+%define vm.SP r8d
 %define vm.RP rsp
-%define vm.IP r9
-%define vm.IP.32 r9d
-%define vm.abs(x) (0x100000000 + x)
+%define vm.IP r9d
 
 ; TODO check stack bounds
 %macro vm.push_ 2
@@ -70,13 +69,13 @@ SECTION .text
 
 op.table:
     ; 00 - 0F
-    dq op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.ud
-    times 8 dq op.ud
+    dw op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.ud
+    times 8 dw op.ud
     ; 10 - 18
-    dq alu.add, alu.sub, alu.mul, alu.and, alu.or, alu.xor, op.ud, op.ud
-    dq alu.divrem
-;    times 256-5 dq op.ud
+    dw alu.add, alu.sub, alu.mul, alu.and, alu.or, alu.xor, op.ud, op.ud
+    dw alu.divrem
 op.last equ 0x18
+;    times 256-op.last dq op.ud
 
 op.nop:
     jmp vm.loop
@@ -94,42 +93,34 @@ op.lit32:
     jmp vm.loop
 
 op.call:
-    R.push vm.IP.32
+    R.push vm.IP
 op.jmp:
-    S.pop eax ; target
-jmp.eax:
-    mov vm.IP, vm.abs(0)
-    add vm.IP, rax
-
-    cmp vm.IP.32, 0
-    jl jmp.builtin
+    S.pop vm.IP
+op.jmp.check:
+    cmp vm.IP, 0
+    jl op.jmp.builtin
     jmp vm.loop
 
-msg.undef_builtin: db `Undefined builtin function\n`
-msg.undef_builtin.len equ $ - msg.undef_builtin
-
-jmp.builtin:
-    inc vm.IP.32 ; 0xffff_ffff
+op.jmp.builtin:
+    inc vm.IP ; 0xffff_ffff
     jz vm.exit
 
-    inc vm.IP.32 ; 0xffff_fffe
-    jnz jmp.builtin.undef
+    inc vm.IP ; 0xffff_fffe
+    jnz op.jmp.builtin.undef
 
     S.pop edx ; len
-    S.pop eax ; data
-    mov rsi, vm.abs(0)
-    add rsi, rax
+    S.pop esi ; data
     call vm.print
     jmp op.ret
 
-jmp.builtin.undef:
-    mov rsi, msg.undef_builtin
-    mov rdx, msg.undef_builtin.len
+op.jmp.builtin.undef:
+    mov esi, msg.undef_builtin
+    mov edx, msg.undef_builtin.len
     jmp vm.panic
 
 op.ret:
-    R.pop eax
-    jmp jmp.eax
+    R.pop vm.IP
+    jmp op.jmp.check
 
 op.dup:
     mov eax, [vm.SP]
@@ -179,39 +170,42 @@ op.getset:
     shl bl, 2 ; CF = op & 0x40, BL = (op & 0x3f) * 4
     jc op.set
 op.get:
-    mov eax, [vm.SP + rbx]
+    mov eax, [vm.SP + ebx]
     S.push eax
     jmp vm.loop
 op.set:
     S.pop eax
-    mov [vm.SP + rbx], eax
+    mov [vm.SP + ebx], eax
     jmp vm.loop
 
-msg.undef_op: db `Undefined instruction\n`
-msg.undef_op.len equ $ - msg.undef_op
-
 op.ud:
-    mov rsi, msg.undef_op
-    mov rdx, msg.undef_op.len
-    jmp vm.panic
-
+    mov esi, msg.undef_op
+    mov edx, msg.undef_op.len
 vm.panic:
-    call vm.print
-    jmp vm.exit
-
+    push qword vm.exit
 vm.print:
-    ; sys_write(stdout, data=rsi, len=rdx)
-    mov rax, 1
-    mov rdi, 1
+    ; sys_write(stdout, data=esi, len=edx)
+    mov eax, 1
+    mov edi, 1
     syscall
     ret
 
 vm.exit:
     ; sys_exit(0)
-    mov rax, 60
-    mov rdi, 0
+    mov eax, 60
+    mov edi, 0
     syscall
     jmp $
+
+GLOBAL vm.start
+vm.start:
+    ; Initialize VM registers
+    mov vm.IP, vm.code.start
+    mov vm.SP, vm.stack.end
+    xor ebx, ebx
+
+    ; Prevent one too many returns.
+    R.push 0xffffffff
 
 vm.loop:
     mov bl, [vm.IP]
@@ -223,16 +217,17 @@ vm.loop:
     cmp bl, op.last
     ja op.ud
 
-    jmp [op.table + ebx * 8]
+    jmp [op.table + ebx * 4]
 
-GLOBAL _start
-_start:
-    ; Initialize VM registers
-    mov vm.SP, vm.abs(0xfffff000)
-    mov vm.IP, vm.abs(0x00001000)
-    xor rbx, rbx
+msg.undef_op: db `Undefined instruction\n`
+msg.undef_op.len equ $ - msg.undef_op
 
-    ; Prevent one too many returns.
-    R.push 0xffffffff
+msg.undef_builtin: db `Undefined builtin function\n`
+msg.undef_builtin.len equ $ - msg.undef_builtin
 
-    jmp vm.loop
+SECTION vm.code
+vm.code.start:
+
+SECTION vm.stack nobits write
+resb 0xfffff000 - 0xfff01000
+vm.stack.end:
