@@ -1,4 +1,4 @@
-BITS 64
+format ELF64
 
 ; # RS-3 Dual Stack Machine
 
@@ -46,35 +46,36 @@ BITS 64
 ; C0-FF SET     S[op & 0x3f] = S.pop()
 ; .. UD         vm.panic("Undefined instruction")
 
-SECTION vm.native exec align=16
+section "vm.native" executable
 
-%define vm.SP r8d
-%define vm.RP rsp
-%define vm.IP r9d
+vm.SP equ r8d
+vm.SP.64 equ r8
+vm.RP equ rsp
+vm.IP equ r9d
 
 ; TODO check stack bounds
-%macro vm.push_ 2
-    sub vm. %+ %1 %+ P, 4
-    mov [vm. %+ %1 %+ P], dword %2
-%endmacro
-%macro vm.pop_ 2
-    mov dword %2, [vm. %+ %1 %+ P]
-    add vm. %+ %1 %+ P, 4
-%endmacro
+macro vm.push_ r, x {
+    sub vm.#r#P, 4
+    mov [vm.#r#P], dword x
+}
+macro vm.pop_ r, x {
+    mov dword x, [vm.#r#P]
+    add vm.#r#P, 4
+}
 
-%define S.push vm.push_ S,
-%define S.pop vm.pop_ S,
-%define R.push vm.push_ R,
-%define R.pop vm.pop_ R,
+macro S.push x {vm.push_ S, x}
+macro S.pop x {vm.pop_ S, x}
+macro R.push x {vm.push_ R, x}
+macro R.pop x {vm.pop_ R, x}
 
 op.table:
     ; 00 - 0F
-    dw op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.ud
-    times 8 dw op.ud
+    dq op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.ud
+    times 8 dq op.ud
     ; 10 - 18
-    dw alu.add, alu.sub, alu.mul, alu.and, alu.or, alu.xor, op.ud, op.ud
-    dw alu.divrem
-op.last equ 0x18
+    dq alu.add, alu.sub, alu.mul, alu.and, alu.or, alu.xor, op.ud, op.ud
+    dq alu.divrem
+op.last = 0x18
 ;    times 256-op.last dq op.ud
 
 op.nop:
@@ -138,12 +139,12 @@ op.cmp:
     mov [vm.SP], eax
     jmp vm.loop
 
-%macro op.alu 1
-    alu. %+ %1:
+macro op.alu op {
+    alu.#op:
         S.pop eax
-        %1 [vm.SP], eax
+        op [vm.SP], eax
         jmp vm.loop
-%endmacro
+}
 
 op.alu add
 op.alu sub
@@ -197,11 +198,15 @@ vm.exit:
     syscall
     jmp $
 
-GLOBAL vm.start
+public vm.start
 vm.start:
     ; Initialize VM registers
+    extrn vm.code.start
     mov vm.IP, vm.code.start
-    mov vm.SP, vm.stack.end
+
+    ; Bad relocation creeps up.
+    extrn vm.stack.end
+    mov vm.SP.64, vm.stack.end
     xor ebx, ebx
 
     ; Prevent one too many returns.
@@ -217,17 +222,10 @@ vm.loop:
     cmp bl, op.last
     ja op.ud
 
-    jmp [op.table + ebx * 4]
+    jmp qword [op.table + ebx * 8]
 
-msg.undef_op: db `Undefined instruction\n`
-msg.undef_op.len equ $ - msg.undef_op
+msg.undef_op: db "Undefined instruction\n"
+msg.undef_op.len = $ - msg.undef_op
 
-msg.undef_builtin: db `Undefined builtin function\n`
-msg.undef_builtin.len equ $ - msg.undef_builtin
-
-SECTION vm.code
-vm.code.start:
-
-SECTION vm.stack nobits write
-resb 0xfffff000 - 0xfff01000
-vm.stack.end:
+msg.undef_builtin: db "Undefined builtin function\n"
+msg.undef_builtin.len = $ - msg.undef_builtin

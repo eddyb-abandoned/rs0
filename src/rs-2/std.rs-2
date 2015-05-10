@@ -1,0 +1,270 @@
+format ELF64
+section "vm.code"
+
+macro .with [name] {
+    common
+        irpv previous,.with \{
+            restore previous
+            restore .with
+        \}
+    forward
+        local .name
+        match any,name \{
+            define name .name
+            define .with name
+        \}
+}
+
+macro cstring [string] {
+    common local pos, len, a, esc, val
+    .with asDst,dst
+        asDst:: dst rb len
+        virtual at 0
+            db string
+            pos = 0
+            esc = 0
+            repeat $
+                load a byte from %-1
+                if a >= '0' & a <= '7'
+                    if esc > 0
+                        if esc < 4
+                            esc = esc + 1
+                            val = val * 8 + a - '0'
+                        else
+                            esc = 0
+                            store byte val at asDst:dst+pos
+                            store byte a at asDst:dst+pos+1
+                            pos = pos + 2
+                        end if
+                    else
+                        store byte a at asDst:dst+pos
+                        pos = pos + 1
+                    end if
+                else
+                    if a = '\'
+                        if esc > 0
+                            store byte '\' at asDst:dst+pos
+                            pos = pos + 1
+                            esc = 0
+                        else
+                            esc = 1
+                            val = 0
+                        end if
+                    else if a = 'n' & esc > 0
+                        store byte 0x0a at asDst:dst+pos
+                        pos = pos + 1
+                        esc = 0
+                    else
+                        if esc > 0
+                            esc = 0
+                            store byte val at asDst:dst+pos
+                            pos = pos + 1
+                        end if
+                        store byte a at asDst:dst+pos
+                        pos = pos + 1
+                    end if
+                end if
+            end repeat
+            if esc > 1
+              store byte val at asDst:dst+pos
+              pos = pos + 1
+            end if
+            len = pos
+        end virtual
+    .with
+}
+
+; Builtin calls.
+sys.print = 0xfffffffe
+sys.exit  = 0xffffffff
+
+; Stack management.
+sys.stack.depth = 0
+macro sys.stack.add n { sys.stack.depth = sys.stack.depth + n }
+macro sys.stack.display {
+    display_hex8 sys.stack.depth
+    display ": "
+}
+
+; Basic opcodes.
+macro lit8 x {
+    db 1
+    db x
+    sys.stack.add 1
+}
+
+macro lit32 x {
+    sys.stack.display
+    display "lit32 ", 10
+    db 2
+    dd x
+    sys.stack.add 1
+}
+
+macro display_hex8 x {
+    if x < 0
+        display '-'
+        y = -(x)
+    else
+        y = x
+    end if
+    repeat 2
+        d = '0' + y shr (8-%*4) and 0Fh
+        if d > '9'
+            d = d + 'A'-'9'-1
+        end if
+        display d
+    end repeat
+}
+
+macro def_op name, opcode, diff {
+    macro name [args] \{ common
+        push args
+        sys.stack.display
+        display `name, 10
+        db opcode
+        sys.stack.add -(diff)
+    \}
+}
+
+def_op call, 0x03, 1 - 0
+def_op ret,  0x04, 0 - 0
+def_op jmp,  0x05, 1 - 0
+def_op cmp,  0x06, 5 - 1
+def_op add,  0x10, 2 - 1
+def_op sub,  0x11, 2 - 1
+def_op mul,  0x12, 2 - 1
+def_op divrem,0x18,2 - 2
+
+macro get n {
+    sys.stack.display
+    display "get "
+    display_hex8 n
+    display 10
+    db 0x80 + n
+    sys.stack.add 1
+}
+macro set n {
+    sys.stack.display
+    display "set "
+    display_hex8 n
+    display 10
+    sys.stack.add -1
+    db 0xc0 + n
+}
+
+; Constants and variables.
+macro push [x] {
+    if x eq
+    else if x eq _
+    else if x eqtype ""
+        local str
+        section "vm.const"
+        str: cstring x
+        str.len = $ - str
+
+        section "vm.code"
+        lit32 str
+        lit32 str.len
+    else if sys.stack.is_var#x eqtype "yes"
+        get sys.stack.depth - (sys.stack.var#x)
+    else
+        lit32 x
+    end if
+}
+
+macro pop [x] { reverse
+    if x eq
+    else if sys.stack.is_var#x eqtype "yes"
+        set sys.stack.depth - (sys.stack.var#x)
+    end if
+}
+
+macro let name, value {
+    push value
+    sys.stack.display
+    display "let "#`name
+    display 10
+    sys.stack.var#name = sys.stack.depth
+    sys.stack.is_var#name equ "yes"
+}
+
+macro fn name, [arg] {
+    if ~ arg eq
+        sys.stack.add 1
+        let arg
+    end if
+    common name:
+        ;call sys.print, "("#`name#")"
+        define sys.fn.args arg
+}
+
+macro ret {
+    irp arg, sys.fn.args \{
+        if ~ arg eq
+            drop
+        end if
+    \}
+    ret
+}
+
+macro endfn {
+    ret
+    restore sys.fn.args
+}
+
+macro loop {
+    sys.fn.loop = $
+}
+
+macro while [cond] { common
+    jmp.if cond, sys.fn.loop
+    restore sys.fn.loop
+}
+
+macro bytes [xs] { common
+    local data
+    section "vm.const"
+    data: db xs
+
+    section "vm.code"
+    lit32 data
+}
+
+; Opcodes with arguments
+macro call f, [args] { common
+    sys.stack.save = sys.stack.depth
+    push args
+    push f
+    call
+    sys.stack.depth = sys.stack.save
+}
+
+macro jmp.if a, cc, b, target {
+    local after
+    push a, b
+    if cc eq lt
+        cmp target, after, after
+    else if cc eq gt
+        cmp after, after, target
+    else if cc eq ge
+        cmp after, target, target
+    else if cc eq ne
+        cmp target, after, target
+    end if
+    jmp
+    after:
+}
+
+macro swap a, b { ; a, b -> b, a (for swap 0, 1)
+    get a         ; a, b       -> a, b, b
+    get b + 1     ; a, b, b    -> a, b, b, a
+    set a + 1     ; a, b, b, a -> a, a, b
+    set b         ; a, a, b    -> b, a
+}
+
+macro drop { ; a, b -> a
+    get 0    ; a, b    -> a, b, b
+    sub      ; a, b, b -> a, 0
+    add      ; a, 0,   -> a
+}

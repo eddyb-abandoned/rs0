@@ -1,0 +1,65 @@
+include "std.rs-2"
+
+fn main
+    let a, 0
+    let b, 1
+    let i, 0
+
+    loop
+        call print.dec, b
+        call sys.print, " "
+
+        ; i += 1
+        add 1
+
+        ; (a, b) = (b, a + b)
+        push b
+        add a, b
+        pop a, b
+    while i, lt, 100
+
+    call sys.print, "\n"
+endfn
+
+fn print.dec, x
+    jmp.if x, ge, 0, print.dec.positive
+        call sys.print, "-"
+        mul -1
+    print.dec.positive:
+
+    ; Leave a stop "mark" on the stack.
+    ; x -> 10, x
+    push x, 10 ; x -> x, x, 10
+    pop x ; x, x, 10 -> 10, x
+    let x
+
+    ; Split each digit into a stack slot.
+    ; 10, abcd -> 10, d, c, b, a
+    loop
+        ; x -> q = x / 10, r = x % 10
+        divrem 10
+
+        ; q, r -> r, q
+        swap 0, 1
+        let q
+
+    while q, ne, 0
+
+    drop ; Remove the stop "mark"
+
+    loop
+        ; print(digits[digit..digit+1])
+        bytes "0123456789"
+        add
+        call sys.print, _, 1
+
+        let top
+    while top, lt, 10
+endfn
+
+;$ fasm src/rs-3/x64-linux/vm.s vm.o
+;$ nasm src/rs-3/x64-linux/bss.nasm -f elf64 -o bss.o
+;$ fasm src/rs-2/fib.rs-2 fib.o
+;$ ld vm.o fib.o bss.o -o fib -T src/rs-3/x64-linux/link.ld -z max-page-size=0x1000
+;$ ./fib
+; 1 1 2 3 5 8 13 21 34 55 89 144 233 377 61 987 1597 2584 ...

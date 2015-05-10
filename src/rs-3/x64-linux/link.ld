@@ -6,8 +6,11 @@ SECTIONS {
     vm.native : { *(vm.native) }
 
     . = 0x00002000;
+    vm.code.start = .;
     vm.code : { *(vm.code) }
+    vm.const : { *(vm.const) }
 
     . = 0xfff01000;
     vm.stack :{ *(vm.stack) }
+    vm.stack.end = .;
 }
