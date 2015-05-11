@@ -49,7 +49,6 @@ format ELF64
 section "vm.native" executable
 
 vm.SP equ r8d
-vm.SP.64 equ r8
 vm.RP equ rsp
 vm.IP equ r9d
 
@@ -201,12 +200,8 @@ vm.exit:
 public vm.start
 vm.start:
     ; Initialize VM registers
-    extrn vm.code.start
-    mov vm.IP, vm.code.start
-
-    ; Bad relocation creeps up.
-    extrn vm.stack.end
-    mov vm.SP.64, vm.stack.end
+    mov vm.IP, 0x00002000
+    mov vm.SP, 0xfffff000
     xor ebx, ebx
 
     ; Prevent one too many returns.
