@@ -222,13 +222,11 @@ macro while [cond] { common
     restore sys.fn.loop
 }
 
-macro bytes [xs] { common
-    local data
+macro const8 name, [xs] { common
     section "vm.const"
-    data: db xs
+    name: db xs
 
     section "vm.code"
-    lit32 data
 }
 
 ; Opcodes with arguments

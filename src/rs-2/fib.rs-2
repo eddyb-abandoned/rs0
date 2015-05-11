@@ -49,8 +49,8 @@ fn print.dec, x
 
     loop
         ; print(digits[digit..digit+1])
-        bytes "0123456789"
-        add
+        const8 digits, "0123456789"
+        add digits
         call sys.print, _, 1
 
         let top
