@@ -1,0 +1,5 @@
+include "../std.rs-2"
+
+fn main
+    call sys.print, "Hello World!\n"
+endfn

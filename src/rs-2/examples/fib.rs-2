@@ -1,4 +1,4 @@
-include "std.rs-2"
+include "../std.rs-2"
 
 fn main
     let a, 0
@@ -56,9 +56,3 @@ fn print.dec, x
         let top
     while top, lt, 10
 endfn
-
-;$ fasm src/rs-3/x64-linux/vm.s vm.o
-;$ fasm src/rs-2/fib.rs-2 fib.o
-;$ ld vm.o fib.o -o fib -T src/rs-3/x64-linux/link.ld -z max-page-size=0x1000 -s
-;$ ./fib
-; 1 1 2 3 5 8 13 21 34 55 89 144 233 377 61 987 1597 2584 ...
