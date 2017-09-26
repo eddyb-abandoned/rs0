@@ -224,3 +224,6 @@ msg.undef_op.len = $ - msg.undef_op
 
 msg.undef_builtin: db "Undefined builtin function\n"
 msg.undef_builtin.len = $ - msg.undef_builtin
+
+section "vm.arena"
+section "vm.stack"
