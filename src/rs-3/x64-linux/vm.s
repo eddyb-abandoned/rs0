@@ -72,8 +72,7 @@ op.table:
     times 8 dq op.ud
     ; 10 - 18
     dq alu.add, alu.sub, alu.mul, alu.div, alu.rem, alu.and, alu.or, alu.xor
-op.last = 0x18
-;    times 256-op.last dq op.ud
+op.table.len = ($ - op.table) / 8
 
 op.nop:
     jmp vm.loop
@@ -221,8 +220,8 @@ vm.loop:
     cmp bl, 0x80
     jae op.getset
 
-    cmp bl, op.last
-    ja op.ud
+    cmp bl, op.table.len
+    jae op.ud
 
     jmp qword [op.table + ebx * 8]
 
