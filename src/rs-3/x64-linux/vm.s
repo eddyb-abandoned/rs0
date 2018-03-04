@@ -39,10 +39,10 @@ format ELF64
 ; 04 RET        IP = R.pop()
 ; 05 JMP        IP = S.pop()
 ; 06 CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
+; 07 GET        S.push(S[imm8])
+; 08 SET        S[imm8] = S.pop()
 ; 1x ALU        S.push([+, -, *, /s, /u, %s, %u, &, |, ^][op - 0x10](S.pop(), S.pop()))
 ;
-; 80-BF GET     S.push(S[op & 0x3f])
-; C0-FF SET     S[op & 0x3f] = S.pop()
 ; .. UD         vm.panic("Undefined instruction")
 
 section "vm.native" executable
@@ -68,9 +68,9 @@ macro R.pop x {vm.pop_ R, x}
 
 op.table:
     ; 00
-    dq op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.ud
-    ; 08
-    times 8 dq op.ud
+    dq op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.get, op.set
+    ; 09
+    times 7 dq op.ud
     ; 10
     dq alu.add, alu.sub, alu.mul, alu.div_s, alu.div_u, alu.rem_s, alu.rem_u, alu.and, alu.or, alu.xor
 op.table.len = ($ - op.table) / 8
@@ -171,16 +171,18 @@ op.alu.divrem div_u, div, eax
 op.alu.divrem rem_s, idiv, edx
 op.alu.divrem rem_u, div, edx
 
-op.getset:
-    shl bl, 2 ; CF = op & 0x40, BL = (op & 0x3f) * 4
-    jc op.set
 op.get:
-    mov eax, [vm.SP + ebx]
+    mov bl, [vm.IP]
+    inc vm.IP
+    mov eax, [vm.SP + ebx * 4]
     S.push eax
     jmp vm.loop
+
 op.set:
+    mov bl, [vm.IP]
+    inc vm.IP
     S.pop eax
-    mov [vm.SP + ebx], eax
+    mov [vm.SP + ebx * 4], eax
     jmp vm.loop
 
 op.ud:
@@ -215,9 +217,6 @@ vm.start:
 vm.loop:
     mov bl, [vm.IP]
     inc vm.IP
-
-    cmp bl, 0x80
-    jae op.getset
 
     cmp bl, op.table.len
     jae op.ud

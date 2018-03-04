@@ -144,7 +144,8 @@ macro get n {
     display "get "
     display_hex8 n
     display 10
-    db 0x80 + n
+    db 0x07
+    db n
     sys.stack.add 1
 }
 macro set n {
@@ -153,7 +154,8 @@ macro set n {
     display_hex8 n
     display 10
     sys.stack.add -1
-    db 0xc0 + n
+    db 0x08
+    db n
 }
 
 ; Constants and variables.
