@@ -1,5 +1,4 @@
 format ELF64
-section "vm.code"
 
 macro .with [name] {
     common
@@ -73,6 +72,19 @@ macro cstring [string] {
         end virtual
     .with
 }
+
+; Set up data and code sections.
+section "vm.data" align 1
+org 0
+; HACK(eddyb) this avoids a NOBITS vm.data section
+db 0
+sys.data.pos = $
+
+section "vm.code" align 1
+org 0
+; HACK(eddyb) this avoids a NOBITS vm.code section
+db 0
+sys.code.pos = $
 
 ; Builtin calls.
 sys.print = 0xfffffffe
@@ -157,12 +169,17 @@ macro push [x] {
     if x eq
     else if x eq _
     else if x eqtype ""
+        sys.code.pos = $
+
         local str
-        section "vm.const"
+        section "vm.data" align 1
+        org sys.data.pos
         str: cstring x
         str.len = $ - str
+        sys.data.pos = $
 
-        section "vm.code"
+        section "vm.code" align 1
+        org sys.code.pos
         lit32 str
         lit32 str.len
     else if sys.stack.is_var#x eqtype "yes"
@@ -222,10 +239,14 @@ macro while [cond] { common
 }
 
 macro const8 name, [xs] { common
-    section "vm.const"
+    sys.code.pos = $
+    section "vm.data" align 1
+    org sys.data.pos
     name: db xs
+    sys.data.pos = $
 
-    section "vm.code"
+    section "vm.code" align 1
+    org sys.code.pos
 }
 
 ; Opcodes with arguments

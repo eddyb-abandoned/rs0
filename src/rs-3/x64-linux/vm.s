@@ -11,10 +11,11 @@ format ELF64
 ; ## Memory layout
 ; 0x0000_0000..0x0000_1000 Zero page
 ; 0x0000_1000..0x0000_2000 VM native code
-; 0x0000_2000..0x1000_0000 Code & read-only data
+; 0x0000_2000..0x1000_0000 Read-only data
 ; 0xfff0_0000..0xfff0_1000 Guard page
 ; 0xfff0_1000..0xffff_f000 Data stack
 ; 0xffff_f000..0xffff_fffe Guard page
+; 0x1_0000_0000.. Bytecode
 
 ; At the end of the address space, within the upper
 ; guard page, there are several builtin call targets:
@@ -45,9 +46,11 @@ format ELF64
 
 section "vm.native" executable
 
-vm.SP equ r8d
+vm.SP equ r8
 vm.RP equ rsp
 vm.IP equ r9d
+vm.IP.base equ r10
+vm.IP.mem equ r10 + r9
 
 ; TODO check stack bounds
 macro vm.push_ r, x {
@@ -77,7 +80,7 @@ op.nop:
     jmp vm.loop
 
 op.lit32:
-    mov eax, [vm.IP]
+    mov eax, [vm.IP.mem]
     add vm.IP, 4
     S.push eax
     jmp vm.loop
@@ -100,12 +103,14 @@ op.jmp.builtin:
 
     S.pop edx ; len
     S.pop esi ; data
+    mov rcx, 0x100002000
+    add rsi, rcx ; HACK(eddyb) clean this up
     call vm.print
     jmp op.ret
 
 op.jmp.builtin.undef:
-    mov esi, msg.undef_builtin
-    mov edx, msg.undef_builtin.len
+    mov rsi, msg.undef_builtin
+    mov rdx, msg.undef_builtin.len
     jmp vm.panic
 
 op.ret:
@@ -164,56 +169,60 @@ op.alu.divrem rem_s, idiv, edx
 op.alu.divrem rem_u, div, edx
 
 op.get:
-    mov bl, [vm.IP]
+    mov bl, [vm.IP.mem]
     inc vm.IP
-    mov eax, [vm.SP + ebx * 4]
+    mov eax, [vm.SP + rbx * 4]
     S.push eax
     jmp vm.loop
 
 op.set:
-    mov bl, [vm.IP]
+    mov bl, [vm.IP.mem]
     inc vm.IP
     S.pop eax
-    mov [vm.SP + ebx * 4], eax
+    mov [vm.SP + rbx * 4], eax
     jmp vm.loop
 
 op.ud:
-    mov esi, msg.undef_op
-    mov edx, msg.undef_op.len
+    mov rsi, msg.undef_op
+    mov rdx, msg.undef_op.len
 vm.panic:
-    push qword vm.exit
+    call vm.print
+    jmp vm.exit
+
 vm.print:
-    ; sys_write(stdout, data=esi, len=edx)
-    mov eax, 1
-    mov edi, 1
+    ; sys_write(stdout, data=rsi, len=rdx)
+    mov rax, 1
+    mov rdi, 1
     syscall
     ret
 
 vm.exit:
     ; sys_exit(0)
-    mov eax, 60
-    mov edi, 0
+    mov rax, 60
+    mov rdi, 0
     syscall
     jmp $
 
 public vm.start
 vm.start:
     ; Initialize VM registers
-    mov vm.IP, 0x00002000
-    mov vm.SP, 0xfffff000
+    mov vm.IP.base, 0x200000000
+    mov vm.IP, 0x00000000
+    mov vm.SP, 0x1fffff000
     xor ebx, ebx
 
     ; Prevent one too many returns.
     R.push 0xffffffff
 
 vm.loop:
-    mov bl, [vm.IP]
+    mov bl, [vm.IP.mem]
     inc vm.IP
 
     cmp bl, op.table.len
     jae op.ud
 
-    jmp qword [op.table + ebx * 8]
+    mov rcx, op.table
+    jmp qword [rcx + rbx * 8]
 
 msg.undef_op: db "Undefined instruction\n"
 msg.undef_op.len = $ - msg.undef_op
@@ -221,4 +230,4 @@ msg.undef_op.len = $ - msg.undef_op
 msg.undef_builtin: db "Undefined builtin function\n"
 msg.undef_builtin.len = $ - msg.undef_builtin
 
-section "vm.stack"
+section "vm.stack" writeable
