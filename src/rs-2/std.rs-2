@@ -87,16 +87,10 @@ macro sys.stack.display {
 }
 
 ; Basic opcodes.
-macro lit8 x {
-    db 1
-    db x
-    sys.stack.add 1
-}
-
 macro lit32 x {
     sys.stack.display
     display "lit32 ", 10
-    db 2
+    db 1
     dd x
     sys.stack.add 1
 }
@@ -127,10 +121,10 @@ macro def_op name, opcode, diff {
     \}
 }
 
-def_op call, 0x03, 1 - 0
-def_op ret,  0x04, 0 - 0
-def_op jmp,  0x05, 1 - 0
-def_op cmp,  0x06, 5 - 1
+def_op call, 0x02, 1 - 0
+def_op ret,  0x03, 0 - 0
+def_op jmp,  0x04, 1 - 0
+def_op cmp,  0x05, 5 - 1
 def_op add,  0x10, 2 - 1
 def_op sub,  0x11, 2 - 1
 def_op mul,  0x12, 2 - 1
@@ -144,7 +138,7 @@ macro get n {
     display "get "
     display_hex8 n
     display 10
-    db 0x07
+    db 0x06
     db n
     sys.stack.add 1
 }
@@ -154,7 +148,7 @@ macro set n {
     display_hex8 n
     display 10
     sys.stack.add -1
-    db 0x08
+    db 0x07
     db n
 }
 

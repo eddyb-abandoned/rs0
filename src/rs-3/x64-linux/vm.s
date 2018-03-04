@@ -33,14 +33,13 @@ format ELF64
 
 ; ## Instruction set
 ; 00 NOP
-; 01 LIT8       S.push(imm8 as i32)
-; 02 LIT32      S.push(imm32)
-; 03 CALL       R.push(IP + 1), IP = S.pop()
-; 04 RET        IP = R.pop()
-; 05 JMP        IP = S.pop()
-; 06 CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
-; 07 GET        S.push(S[imm8])
-; 08 SET        S[imm8] = S.pop()
+; 01 LIT32      S.push(imm32)
+; 02 CALL       R.push(IP + 1), IP = S.pop()
+; 03 RET        IP = R.pop()
+; 04 JMP        IP = S.pop()
+; 05 CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
+; 06 GET        S.push(S[imm8])
+; 07 SET        S[imm8] = S.pop()
 ; 1x ALU        S.push([+, -, *, /s, /u, %s, %u, &, |, ^][op - 0x10](S.pop(), S.pop()))
 ;
 ; .. UD         vm.panic("Undefined instruction")
@@ -68,20 +67,14 @@ macro R.pop x {vm.pop_ R, x}
 
 op.table:
     ; 00
-    dq op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.get, op.set
-    ; 09
-    times 7 dq op.ud
+    dq op.nop, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.get, op.set
+    ; 08
+    times 8 dq op.ud
     ; 10
     dq alu.add, alu.sub, alu.mul, alu.div_s, alu.div_u, alu.rem_s, alu.rem_u, alu.and, alu.or, alu.xor
 op.table.len = ($ - op.table) / 8
 
 op.nop:
-    jmp vm.loop
-
-op.lit8:
-    mov bl, [vm.IP]
-    inc vm.IP
-    S.push ebx
     jmp vm.loop
 
 op.lit32:
