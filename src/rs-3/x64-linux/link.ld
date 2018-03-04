@@ -17,15 +17,8 @@ SECTIONS {
     vm.const : { *(vm.const) } :rodata
     vm.const.end = .;
 
-    vm.arena.start = 0x10000000;
-    vm.arena.end = 0xfff00000;
-    vm.arena (vm.arena.start): {
-        . = vm.arena.end - vm.arena.start;
-        *(vm.arena)
-    } :data
-
     /* The 0x1000's are stack guard pages. */
-    vm.stack.start = vm.arena.end + 0x1000;
+    vm.stack.start = 0xfff00000 + 0x1000;
     vm.stack.end = 0x100000000 - 0x1000;
     vm.stack (vm.stack.start): {
         . = vm.stack.end - vm.stack.start;

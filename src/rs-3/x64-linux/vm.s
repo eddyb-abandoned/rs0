@@ -12,7 +12,6 @@ format ELF64
 ; 0x0000_0000..0x0000_1000 Zero page
 ; 0x0000_1000..0x0000_2000 VM native code
 ; 0x0000_2000..0x1000_0000 Code & read-only data
-; 0x1000_0000..0xfff0_0000 Arena
 ; 0xfff0_0000..0xfff0_1000 Guard page
 ; 0xfff0_1000..0xffff_f000 Data stack
 ; 0xffff_f000..0xffff_fffe Guard page
@@ -222,5 +221,4 @@ msg.undef_op.len = $ - msg.undef_op
 msg.undef_builtin: db "Undefined builtin function\n"
 msg.undef_builtin.len = $ - msg.undef_builtin
 
-section "vm.arena"
 section "vm.stack"
