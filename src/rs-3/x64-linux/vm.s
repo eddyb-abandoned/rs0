@@ -39,7 +39,7 @@ format ELF64
 ; 04 RET        IP = R.pop()
 ; 05 JMP        IP = S.pop()
 ; 06 CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
-; 1x ALU        S.push([+, -, *, /, %, &, |, ^][op - 0x10](S.pop(), S.pop()))
+; 1x ALU        S.push([+, -, *, /s, /u, %s, %u, &, |, ^][op - 0x10](S.pop(), S.pop()))
 ;
 ; 80-BF GET     S.push(S[op & 0x3f])
 ; C0-FF SET     S[op & 0x3f] = S.pop()
@@ -67,11 +67,12 @@ macro R.push x {vm.push_ R, x}
 macro R.pop x {vm.pop_ R, x}
 
 op.table:
-    ; 00 - 0F
+    ; 00
     dq op.nop, op.lit8, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.ud
+    ; 08
     times 8 dq op.ud
-    ; 10 - 18
-    dq alu.add, alu.sub, alu.mul, alu.div, alu.rem, alu.and, alu.or, alu.xor
+    ; 10
+    dq alu.add, alu.sub, alu.mul, alu.div_s, alu.div_u, alu.rem_s, alu.rem_u, alu.and, alu.or, alu.xor
 op.table.len = ($ - op.table) / 8
 
 op.nop:
@@ -154,23 +155,21 @@ alu.mul:
     mov [vm.SP], eax
     jmp vm.loop
 
-alu.div:
-    S.pop ecx ; divisor
-    mov eax, [vm.SP] ; dividend
-    cdq ; edx:eax = sext eax
+macro op.alu.divrem op, div, out {
+    alu.#op:
+        S.pop ecx ; divisor
+        mov eax, [vm.SP] ; dividend
+        cdq ; edx:eax = sext eax
 
-    idiv ecx
-    mov [vm.SP], eax ; quotient
-    jmp vm.loop
+        div ecx
+        mov [vm.SP], out
+        jmp vm.loop
+}
 
-alu.rem:
-    S.pop ecx ; divisor
-    mov eax, [vm.SP] ; dividend
-    cdq ; edx:eax = sext eax
-
-    idiv ecx
-    mov [vm.SP], edx ; remainder
-    jmp vm.loop
+op.alu.divrem div_s, idiv, eax
+op.alu.divrem div_u, div, eax
+op.alu.divrem rem_s, idiv, edx
+op.alu.divrem rem_u, div, edx
 
 op.getset:
     shl bl, 2 ; CF = op & 0x40, BL = (op & 0x3f) * 4

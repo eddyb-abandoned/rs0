@@ -36,8 +36,8 @@ fn print.dec, x
     ; Split each digit into a stack slot.
     ; 10, abcd -> 10, d, c, b, a
     loop
-        div x, 10 ; x -> x, q = x / 10
-        rem x, 10 ; x, q -> x, q, r = x % 10
+        div_u x, 10 ; x -> x, q = x / 10
+        rem_u x, 10 ; x, q -> x, q, r = x % 10
         pop x ; x, q, r -> r, q
         let q
     while q, ne, 0

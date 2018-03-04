@@ -134,8 +134,10 @@ def_op cmp,  0x06, 5 - 1
 def_op add,  0x10, 2 - 1
 def_op sub,  0x11, 2 - 1
 def_op mul,  0x12, 2 - 1
-def_op div,  0x13, 2 - 1
-def_op rem,  0x14, 2 - 1
+def_op div_s,0x13, 2 - 1
+def_op div_u,0x14, 2 - 1
+def_op rem_s,0x15, 2 - 1
+def_op rem_u,0x16, 2 - 1
 
 macro get n {
     sys.stack.display
