@@ -31,19 +31,6 @@ format ELF64
 
 ; NB: The return stack is not visible within the VM memory
 
-; ## Instruction set
-; 00 NOP
-; 01 LIT32      S.push(varuint32)
-; 02 CALL       R.push(IP + 1), IP = S.pop()
-; 03 RET        IP = R.pop()
-; 04 JMP        IP = S.pop()
-; 05 CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
-; 06 GET        S.push(S[varuint32])
-; 07 SET        S[varuint32] = S.pop()
-; 1x ALU        S.push([+, -, *, /s, /u, %s, %u, &, |, ^][op - 0x10](S.pop(), S.pop()))
-;
-; .. UD         vm.panic("Undefined instruction")
-
 section "vm.native" executable
 
 vm.SP equ r8
@@ -105,26 +92,31 @@ imm.varint32.loop:
 imm.varint32.ret:
     ret
 
-op.table:
-    ; 00
-    dq op.nop, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.get, op.set
-    ; 08
-    times 8 dq op.ud
-    ; 10
-    dq alu.add, alu.sub, alu.mul, alu.div_s, alu.div_u, alu.rem_s, alu.rem_u, alu.and, alu.or, alu.xor
-op.table.len = ($ - op.table) / 8
+op.table: times 256 dq (op.ud - $$)
 
-op.nop:
+macro def_op opcode {
+    store qword ($ - $$) at op.table + opcode * 8
+}
+
+def_op 0x00 ; NOP
     jmp vm.loop
 
-op.lit32:
+def_op 0x01 ; LIT32      S.push(varuint32)
     call imm.varint32
     S.push eax
     jmp vm.loop
 
-op.call:
+def_op 0x02 ; CALL       R.push(IP + 1), IP = S.pop()
     R.push vm.IP
-op.jmp:
+    S.pop vm.IP
+    jmp op.jmp.check
+
+def_op 0x03 ; RET        IP = R.pop()
+op.ret:
+    R.pop vm.IP
+    jmp op.jmp.check
+
+def_op 0x04 ; JMP        IP = S.pop()
     S.pop vm.IP
 op.jmp.check:
     cmp vm.IP, 0
@@ -150,16 +142,7 @@ op.jmp.builtin.undef:
     mov rdx, msg.undef_builtin.len
     jmp vm.panic
 
-op.ret:
-    R.pop vm.IP
-    jmp op.jmp.check
-
-op.dup:
-    mov eax, [vm.SP]
-    S.push eax
-    jmp vm.loop
-
-op.cmp:
+def_op 0x05 ; CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
     ; Stack: [a, b, lt, eq, gt] <- SP
     add vm.SP, 4 * 4 ; Point SP to a
     mov eax, [vm.SP]
@@ -170,27 +153,38 @@ op.cmp:
     mov [vm.SP], eax
     jmp vm.loop
 
-macro op.alu op {
-    alu.#op:
+def_op 0x06 ; GET        S.push(S[varuint32])
+    call imm.varuint32
+    mov eax, [vm.SP + rax * 4]
+    S.push eax
+    jmp vm.loop
+
+def_op 0x07 ; SET        S[varuint32] = S.pop()
+    call imm.varuint32
+    S.pop ecx
+    mov [vm.SP + rax * 4], ecx
+    jmp vm.loop
+
+; S.push(f(S.pop(), S.pop()))
+macro def_binop opcode, op {
+    def_op opcode
         S.pop eax
         op [vm.SP], eax
         jmp vm.loop
 }
 
-op.alu add
-op.alu sub
-op.alu and
-op.alu or
-op.alu xor
+def_binop 0x10, add
+def_binop 0x11, sub
 
-alu.mul:
+def_op 0x12
     S.pop eax
     imul eax, [vm.SP]
     mov [vm.SP], eax
     jmp vm.loop
 
-macro op.alu.divrem op, div, out {
-    alu.#op:
+; div(S.pop(), S.pop()); S.push(out)
+macro def_binop.divrem opcode, div, out {
+    def_op opcode
         S.pop ecx ; divisor
         mov eax, [vm.SP] ; dividend
         if div eq idiv
@@ -204,22 +198,14 @@ macro op.alu.divrem op, div, out {
         jmp vm.loop
 }
 
-op.alu.divrem div_s, idiv, eax
-op.alu.divrem div_u, div, eax
-op.alu.divrem rem_s, idiv, edx
-op.alu.divrem rem_u, div, edx
+def_binop.divrem 0x13, idiv, eax
+def_binop.divrem 0x14, div, eax
+def_binop.divrem 0x15, idiv, edx
+def_binop.divrem 0x16, div, edx
 
-op.get:
-    call imm.varuint32
-    mov eax, [vm.SP + rax * 4]
-    S.push eax
-    jmp vm.loop
-
-op.set:
-    call imm.varuint32
-    S.pop ecx
-    mov [vm.SP + rax * 4], ecx
-    jmp vm.loop
+def_binop 0x17, and
+def_binop 0x18, or
+def_binop 0x19, xor
 
 op.ud:
     mov rsi, msg.undef_op
@@ -256,12 +242,11 @@ vm.start:
 vm.loop:
     mov bl, [vm.IP.mem]
     inc vm.IP
-
-    cmp bl, op.table.len
-    jae op.ud
-
-    mov rcx, op.table
-    jmp qword [rcx + rbx * 8]
+    ; HACK(eddyb) Relative addressing - should figure out RIP-relative instead.
+    mov r11, $$
+    mov rcx, [r11 + (op.table - $$) + rbx * 8]
+    add rcx, r11
+    jmp rcx
 
 msg.undef_op: db "Undefined instruction", 10
 msg.undef_op.len = $ - msg.undef_op
