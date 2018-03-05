@@ -1,43 +1,13 @@
 format ELF64
 
-; # RS-3 Dual Stack Machine
-
-; ## Notation
-; S: Data stack
-; R: Return stack
-; IP: Instruction pointer
-; var(u)intN: Immediate bits following the opcode, encoded in LUB128
-
-; ## Memory layout
-; 0x0000_0000..0x0000_1000 Zero page
-; 0x0000_1000..0x0000_2000 VM native code
-; 0x0000_2000..0x1000_0000 Read-only data
-; 0xfff0_0000..0xfff0_1000 Guard page
-; 0xfff0_1000..0xffff_f000 Data stack
-; 0xffff_f000..0xffff_fffe Guard page
-; 0x1_0000_0000.. Bytecode
-
-; At the end of the address space, within the upper
-; guard page, there are several builtin call targets:
-; 0xffff_fffe vm.print(data, len)
-; 0xffff_ffff vm.exit()
-
-; ## Register usage
-; R8D: Data stack pointer (S.P)
-; RSP: Return stack pointer (R.P)
-; R9D: Instruction pointer (IP)
-; EAX: General purpose temporary register
-; EBX: Byte fetch register (BL = [IP++])
-
-; NB: The return stack is not visible within the VM memory
-
-section "vm.native" executable
+section ".text" executable
 
 vm.SP equ r8
 vm.RP equ rsp
 vm.IP equ r9d
 vm.IP.base equ r10
 vm.IP.mem equ r10 + r9
+vm.mem.base equ r12
 
 ; TODO check stack bounds
 macro vm.push_ r, x {
@@ -180,8 +150,11 @@ op.jmp.builtin:
 
     S.pop edx ; len
     S.pop esi ; data
-    mov rcx, 0x100002000
-    add rsi, rcx ; HACK(eddyb) clean this up
+    ; Clamp the length to the 32-bit address space.
+    add rdx, rsi
+    mov edx, edx
+    sub rdx, rsi
+    add rsi, vm.mem.base
     call vm.print
     jmp op.ret
 
@@ -227,6 +200,23 @@ vm.print:
     syscall
     ret
 
+vm.mmap:
+    ; sys_mmap(0, len=rsi, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)
+    mov rax, 9
+    mov rdi, 0
+    mov rdx, 3
+    push r10
+    push r8
+    push r9
+    mov r10, 0x22
+    mov r8, -1
+    mov r9, 0
+    syscall
+    pop r9
+    pop r8
+    pop r10
+    ret
+
 vm.exit:
     ; sys_exit(0)
     mov rax, 60
@@ -234,24 +224,44 @@ vm.exit:
     syscall
     jmp $
 
-public vm.start
-vm.start:
+public start
+start:
     ; Initialize VM registers
-    mov vm.IP.base, 0x200000000
+    extrn vm.code.start
+    mov vm.IP.base, vm.code.start
     mov vm.IP, 0x00000000
-    mov vm.SP, 0x1fffff000
     xor ebx, ebx
 
     ; Prevent one too many returns.
     R.push 0xffffffff
 
+    ; Set up the 4GiB guest address space.
+    mov rsi, 0x100000000
+    call vm.mmap
+    mov vm.mem.base, rax
+
+    ; Copy in the static data.
+    extrn vm.data.start
+    extrn vm.data.end
+    mov rsi, vm.data.start
+    mov rdi, vm.mem.base
+    mov rcx, vm.data.end
+    sub rcx, rsi
+    rep movsb
+
+    ; Set up the stack area.
+    mov rsi, 0x10000000
+    call vm.mmap
+    lea vm.SP, [rax + 0xffff000]
+
+    mov r15, $$
+
 vm.loop:
     mov bl, [vm.IP.mem]
     inc vm.IP
     ; HACK(eddyb) Relative addressing - should figure out RIP-relative instead.
-    mov r11, $$
-    mov rcx, [r11 + (op.table - $$) + rbx * 8]
-    add rcx, r11
+    mov rcx, [r15 + (op.table - $$) + rbx * 8]
+    add rcx, r15
     jmp rcx
 
 msg.trap_op: db "Trap instruction", 10
@@ -262,5 +272,3 @@ msg.undef_op.len = $ - msg.undef_op
 
 msg.undef_builtin: db "Undefined builtin function", 10
 msg.undef_builtin.len = $ - msg.undef_builtin
-
-section "vm.stack" writeable
