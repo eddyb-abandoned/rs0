@@ -98,12 +98,31 @@ macro sys.stack.display {
     display ": "
 }
 
+; LEB128
+macro varuint32 x {
+    local y, lsb7, rest
+    y = x
+    if y < 0
+        y = 0x100000000 + y
+    end if
+    repeat 5
+        lsb7 = y and 0x7f
+        rest = y shr 7
+        if rest = 0
+            db lsb7
+            break
+        end if
+        db (lsb7 or 0x80)
+        y = rest
+    end repeat
+}
+
 ; Basic opcodes.
 macro lit32 x {
     sys.stack.display
     display "lit32 ", 10
     db 1
-    dd x
+    varuint32 x
     sys.stack.add 1
 }
 
@@ -151,7 +170,7 @@ macro get n {
     display_hex8 n
     display 10
     db 0x06
-    db n
+    varuint32 n
     sys.stack.add 1
 }
 macro set n {
@@ -161,7 +180,7 @@ macro set n {
     display 10
     sys.stack.add -1
     db 0x07
-    db n
+    varuint32 n
 }
 
 ; Constants and variables.

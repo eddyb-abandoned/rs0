@@ -6,7 +6,7 @@ format ELF64
 ; S: Data stack
 ; R: Return stack
 ; IP: Instruction pointer
-; immN: Immediate bits following the opcode
+; var(u)intN: Immediate bits following the opcode, encoded in LUB128
 
 ; ## Memory layout
 ; 0x0000_0000..0x0000_1000 Zero page
@@ -33,13 +33,13 @@ format ELF64
 
 ; ## Instruction set
 ; 00 NOP
-; 01 LIT32      S.push(imm32)
+; 01 LIT32      S.push(varuint32)
 ; 02 CALL       R.push(IP + 1), IP = S.pop()
 ; 03 RET        IP = R.pop()
 ; 04 JMP        IP = S.pop()
 ; 05 CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
-; 06 GET        S.push(S[imm8])
-; 07 SET        S[imm8] = S.pop()
+; 06 GET        S.push(S[varuint32])
+; 07 SET        S[varuint32] = S.pop()
 ; 1x ALU        S.push([+, -, *, /s, /u, %s, %u, &, |, ^][op - 0x10](S.pop(), S.pop()))
 ;
 ; .. UD         vm.panic("Undefined instruction")
@@ -67,6 +67,21 @@ macro S.pop x {vm.pop_ S, x}
 macro R.push x {vm.push_ R, x}
 macro R.pop x {vm.pop_ R, x}
 
+imm.varuint32:
+    xor eax, eax
+    xor cl, cl
+imm.varuint32.loop:
+    inc vm.IP
+    mov bl, [vm.IP.mem - 1]
+    and ebx, 0x7f
+    shl ebx, cl
+    or eax, ebx
+    add cl, 7
+    test byte [vm.IP.mem - 1], 0x80
+    jnz imm.varuint32.loop
+    xor ebx, ebx
+    ret
+
 op.table:
     ; 00
     dq op.nop, op.lit32, op.call, op.ret, op.jmp, op.cmp, op.get, op.set
@@ -80,8 +95,7 @@ op.nop:
     jmp vm.loop
 
 op.lit32:
-    mov eax, [vm.IP.mem]
-    add vm.IP, 4
+    call imm.varuint32
     S.push eax
     jmp vm.loop
 
@@ -173,17 +187,15 @@ op.alu.divrem rem_s, idiv, edx
 op.alu.divrem rem_u, div, edx
 
 op.get:
-    mov bl, [vm.IP.mem]
-    inc vm.IP
-    mov eax, [vm.SP + rbx * 4]
+    call imm.varuint32
+    mov eax, [vm.SP + rax * 4]
     S.push eax
     jmp vm.loop
 
 op.set:
-    mov bl, [vm.IP.mem]
-    inc vm.IP
-    S.pop eax
-    mov [vm.SP + rbx * 4], eax
+    call imm.varuint32
+    S.pop ecx
+    mov [vm.SP + rax * 4], ecx
     jmp vm.loop
 
 op.ud:
