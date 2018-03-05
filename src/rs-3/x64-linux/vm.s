@@ -156,7 +156,11 @@ macro op.alu.divrem op, div, out {
     alu.#op:
         S.pop ecx ; divisor
         mov eax, [vm.SP] ; dividend
-        cdq ; edx:eax = sext eax
+        if div eq idiv
+            cdq ; edx:eax = sext eax
+        else
+            xor edx, edx
+        end if
 
         div ecx
         mov [vm.SP], out
