@@ -2,7 +2,7 @@ format ELF64
 
 section ".text" executable
 
-include "../x64/vm.s"
+include "../x86_64/vm.s"
 
 vm.print:
     ; sys_write(stdout, data=rsi, len=rdx)

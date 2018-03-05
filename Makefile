@@ -1,4 +1,4 @@
-TARGET := x64-linux
+TARGET := x86_64-linux
 LDFLAGS := -T src/rs-3/$(TARGET)/link.ld -z max-page-size=0x1000 -s
 OUT := target/$(TARGET)
 
