@@ -73,13 +73,36 @@ imm.varuint32:
 imm.varuint32.loop:
     inc vm.IP
     mov bl, [vm.IP.mem - 1]
-    and ebx, 0x7f
-    shl ebx, cl
-    or eax, ebx
+    mov edx, ebx
+    and edx, 0x7f
+    shl edx, cl
+    or eax, edx
     add cl, 7
-    test byte [vm.IP.mem - 1], 0x80
+    test bl, 0x80
     jnz imm.varuint32.loop
-    xor ebx, ebx
+    ret
+
+imm.varint32:
+    xor eax, eax
+    xor cl, cl
+imm.varint32.loop:
+    inc vm.IP
+    mov bl, [vm.IP.mem - 1]
+    mov edx, ebx
+    and edx, 0x7f
+    shl edx, cl
+    or eax, edx
+    add cl, 7
+    test bl, 0x80
+    jnz imm.varint32.loop
+    ; Sign-extend the last 7-bit group
+    neg cl
+    add cl, 32
+    cmp cl, 0
+    jl imm.varint32.ret
+    shl eax, cl
+    sar eax, cl
+imm.varint32.ret:
     ret
 
 op.table:
@@ -95,7 +118,7 @@ op.nop:
     jmp vm.loop
 
 op.lit32:
-    call imm.varuint32
+    call imm.varint32
     S.push eax
     jmp vm.loop
 

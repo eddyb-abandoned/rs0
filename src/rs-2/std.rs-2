@@ -101,14 +101,31 @@ macro sys.stack.display {
 ; LEB128
 macro varuint32 x {
     local y, lsb7, rest
-    y = x
-    if y < 0
-        y = 0x100000000 + y
-    end if
+    y = dword x
     repeat 5
         lsb7 = y and 0x7f
         rest = y shr 7
         if rest = 0
+            db lsb7
+            break
+        end if
+        db (lsb7 or 0x80)
+        y = rest
+    end repeat
+}
+macro varint32 x {
+    local y, lsb7, rest, s
+    y = dword x
+    repeat 5
+        lsb7 = y and 0x7f
+        ; Signed shift right by 7 bits.
+        rest = y shr 7
+        if (y and (1 shl 31)) <> 0
+            rest = rest or (0x7f shl (32 - 7))
+        end if
+        ; The sign bit must be in the last 7-bit group.
+        s = (lsb7 and 0x40)
+        if ((rest = 0) & (s = 0)) | ((rest = 0xffffffff) & (s <> 0))
             db lsb7
             break
         end if
@@ -122,7 +139,7 @@ macro lit32 x {
     sys.stack.display
     display "lit32 ", 10
     db 1
-    varuint32 x
+    varint32 x
     sys.stack.add 1
 }
 
