@@ -73,19 +73,6 @@ macro cstring [string] {
     .with
 }
 
-; Set up data and code sections.
-section "vm.data" align 1
-org 0
-; HACK(eddyb) this avoids a NOBITS vm.data section
-db 0
-sys.data.pos = $
-
-section "vm.code" align 1
-org 0
-; HACK(eddyb) this avoids a NOBITS vm.code section
-db 0
-sys.code.pos = $
-
 ; Builtin calls.
 sys.print = 0xfffffffe
 sys.exit  = 0xffffffff
@@ -135,10 +122,10 @@ macro varint32 x {
 }
 
 ; Basic opcodes.
-macro lit32 x {
+macro i32.const x {
     sys.stack.display
-    display "lit32 ", 10
-    db 1
+    display "i32.const ", 10
+    db 0x41
     varint32 x
     sys.stack.add 1
 }
@@ -169,24 +156,28 @@ macro def_op name, opcode, diff {
     \}
 }
 
-def_op call, 0x02, 1 - 0
-def_op ret,  0x03, 0 - 0
-def_op jmp,  0x04, 1 - 0
-def_op cmp,  0x05, 5 - 1
-def_op add,  0x10, 2 - 1
-def_op sub,  0x11, 2 - 1
-def_op mul,  0x12, 2 - 1
-def_op div_s,0x13, 2 - 1
-def_op div_u,0x14, 2 - 1
-def_op rem_s,0x15, 2 - 1
-def_op rem_u,0x16, 2 - 1
+def_op trap,0x00, 0 - 0
+def_op nop, 0x01, 0 - 0
+def_op return,0x0f, 0 - 0
+def_op call_indirect,0x11, 1 - 0
+def_op add,  0x6a, 2 - 1
+def_op sub,  0x6b, 2 - 1
+def_op mul,  0x6c, 2 - 1
+def_op div_s,0x6d, 2 - 1
+def_op div_u,0x6e, 2 - 1
+def_op rem_s,0x6f, 2 - 1
+def_op rem_u,0x70, 2 - 1
+
+; Legacy (pre-WASM) RS-3 opcodes
+def_op jmp,  0xf0, 1 - 0
+def_op cmp,  0xf1, 5 - 1
 
 macro get n {
     sys.stack.display
     display "get "
     display_hex8 n
     display 10
-    db 0x06
+    db 0xf2
     varuint32 n
     sys.stack.add 1
 }
@@ -196,7 +187,7 @@ macro set n {
     display_hex8 n
     display 10
     sys.stack.add -1
-    db 0x07
+    db 0xf3
     varuint32 n
 }
 
@@ -216,12 +207,12 @@ macro push [x] {
 
         section "vm.code" align 1
         org sys.code.pos
-        lit32 str
-        lit32 str.len
+        i32.const str
+        i32.const str.len
     else if sys.stack.is_var#x eqtype "yes"
         get sys.stack.depth - (sys.stack.var#x)
     else
-        lit32 x
+        i32.const x
     end if
 }
 
@@ -251,17 +242,17 @@ macro fn name, [arg] {
         define sys.fn.args arg
 }
 
-macro ret {
+macro return {
     irp arg, sys.fn.args \{
         if ~ arg eq
             drop
         end if
     \}
-    ret
+    return
 }
 
 macro endfn {
-    ret
+    return
     restore sys.fn.args
 }
 
@@ -290,7 +281,7 @@ macro call f, [args] { common
     sys.stack.save = sys.stack.depth
     push args
     push f
-    call
+    call_indirect
     sys.stack.depth = sys.stack.save
 }
 
@@ -322,3 +313,16 @@ macro drop { ; a, b -> a
     sub      ; a, b, b -> a, 0
     add      ; a, 0,   -> a
 }
+
+; Set up data and code sections.
+section "vm.data" align 1
+org 0
+; HACK(eddyb) this avoids a NOBITS vm.data section
+db 0
+sys.data.pos = $
+
+section "vm.code" align 1
+org 0
+; HACK(eddyb) this avoids a NOBITS vm.code section
+nop
+sys.code.pos = $
