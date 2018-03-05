@@ -224,10 +224,10 @@ vm.loop:
     mov rcx, op.table
     jmp qword [rcx + rbx * 8]
 
-msg.undef_op: db "Undefined instruction\n"
+msg.undef_op: db "Undefined instruction", 10
 msg.undef_op.len = $ - msg.undef_op
 
-msg.undef_builtin: db "Undefined builtin function\n"
+msg.undef_builtin: db "Undefined builtin function", 10
 msg.undef_builtin.len = $ - msg.undef_builtin
 
 section "vm.stack" writeable
