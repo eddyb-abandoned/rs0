@@ -19,37 +19,40 @@ fn main
     while i, lt, 100
 
     call sys.print, "\n"
+
+    ; Cleanup local variables
+    drop ; i
+    drop ; b
+    drop ; a
 endfn
 
 fn print.dec, x
+    let d, 0
+
     jmp.if x, ge, 0, print.dec.positive
         call sys.print, "-"
-        mul -1
+        mul x, -1
+        pop x
     print.dec.positive:
 
-    ; Leave a stop "mark" on the stack.
-    ; x -> 10, x
-    push x, 10 ; x -> x, x, 10
-    pop x ; x, x, 10 -> 10, x
-    let x
+    ; d = x % 10
+    rem_u x, 10
+    pop d
 
-    ; Split each digit into a stack slot.
-    ; 10, abcd -> 10, d, c, b, a
-    loop
-        div_u x, 10 ; x -> x, q = x / 10
-        rem_u x, 10 ; x, q -> x, q, r = x % 10
-        pop x ; x, q, r -> r, q
-        let q
-    while q, ne, 0
+    ; x = x / 10
+    div_u x, 10
+    pop x
 
-    drop ; Remove the stop "mark"
+    jmp.if x, le, 0, print.dec.digit
+        call print.dec, x
+    print.dec.digit:
 
-    loop
-        ; print(digits[digit..digit+1])
-        const8 digits, "0123456789"
-        add digits
-        call sys.print, _, 1
+    ; print(digits[d..][..1])
+    const8 digits, "0123456789"
+    add d, digits
+    pop d
+    call sys.print, d, 1
 
-        let top
-    while top, lt, 10
+    ; Cleanup local variables
+    drop ; d
 endfn

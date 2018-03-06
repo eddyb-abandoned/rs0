@@ -194,7 +194,6 @@ macro set n {
 ; Constants and variables.
 macro push [x] {
     if x eq
-    else if x eq _
     else if x eqtype ""
         sys.code.pos = $
 
@@ -294,8 +293,13 @@ macro jmp.if a, cc, b, target {
         cmp after, after, target
     else if cc eq ge
         cmp after, target, target
+    else if cc eq le
+        cmp target, target, after
     else if cc eq ne
         cmp target, after, target
+    else
+        display "Unknown condition code", 10
+        assert 0
     end if
     jmp
     after:
