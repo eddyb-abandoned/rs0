@@ -135,7 +135,14 @@ macro def_op name, opcode, diff {
 def_op trap,0x00, 0 - 0
 def_op nop, 0x01, 0 - 0
 def_op return,0x0f, 0 - 0
-def_op call_indirect,0x11, 1 - 0
+macro call f, [args] { common
+    local d
+    d = sys.stack.depth
+    push args
+    db 0x10
+    varuint32 f
+    sys.stack.depth = d
+}
 def_op add,  0x6a, 2 - 1
 def_op sub,  0x6b, 2 - 1
 def_op mul,  0x6c, 2 - 1
@@ -238,15 +245,6 @@ macro const8 name, [xs] { common
 
     section "vm.code" align 1
     org sys.code.pos
-}
-
-; Opcodes with arguments
-macro call f, [args] { common
-    sys.stack.save = sys.stack.depth
-    push args
-    push f
-    call_indirect
-    sys.stack.depth = sys.stack.save
 }
 
 macro jmp.if a, cc, b, target {

@@ -77,9 +77,10 @@ op.ret:
     R.pop vm.IP
     jmp op.jmp.check
 
-def_op 0x11 ; call_indirect
+def_op 0x10 ; call
+    call imm.varuint32
     R.push vm.IP
-    S.pop vm.IP
+    mov vm.IP, eax
     jmp op.jmp.check
 
 def_op 0x41 ; i32.const
