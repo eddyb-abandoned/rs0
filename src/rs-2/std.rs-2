@@ -274,13 +274,6 @@ macro jmp.if a, cc, b, target {
     br_if target
 }
 
-macro swap a, b { ; a, b -> b, a (for swap 0, 1)
-    get a         ; a, b       -> a, b, b
-    get b + 1     ; a, b, b    -> a, b, b, a
-    set a + 1     ; a, b, b, a -> a, a, b
-    set b         ; a, a, b    -> b, a
-}
-
 macro drop { ; a, b -> a
     get 0    ; a, b    -> a, b, b
     sub      ; a, b, b -> a, 0
