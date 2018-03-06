@@ -134,6 +134,15 @@ macro def_op name, opcode, diff {
 
 def_op trap,0x00, 0 - 0
 def_op nop, 0x01, 0 - 0
+macro br target {
+    db 0x0c
+    varuint32 target
+}
+macro br_if target {
+    db 0x0d
+    varuint32 target
+    sys.stack.add -1
+}
 def_op return,0x0f, 0 - 0
 macro call f, [args] { common
     local d
@@ -152,7 +161,6 @@ def_op rem_s,0x6f, 2 - 1
 def_op rem_u,0x70, 2 - 1
 
 ; Legacy (pre-WASM) RS-3 opcodes
-def_op jmp,  0xf0, 1 - 0
 def_op cmp,  0xf1, 5 - 1
 
 macro get n {
@@ -248,24 +256,22 @@ macro const8 name, [xs] { common
 }
 
 macro jmp.if a, cc, b, target {
-    local after
     push a, b
     if cc eq lt
-        cmp target, after, after
+        cmp 1, 0, 0
     else if cc eq gt
-        cmp after, after, target
+        cmp 0, 0, 1
     else if cc eq ge
-        cmp after, target, target
+        cmp 0, 1, 1
     else if cc eq le
-        cmp target, target, after
+        cmp 1, 1, 0
     else if cc eq ne
-        cmp target, after, target
+        cmp 1, 0, 1
     else
         display "Unknown condition code", 10
         assert 0
     end if
-    jmp
-    after:
+    br_if target
 }
 
 macro swap a, b { ; a, b -> b, a (for swap 0, 1)
@@ -290,6 +296,6 @@ sys.data.pos = $
 
 section "vm.code" align 1
 org 0
-; HACK(eddyb) this avoids a NOBITS vm.code section
-nop
+call main
+call sys.exit
 sys.code.pos = $

@@ -72,16 +72,31 @@ def_op 0x00 ; unreachable
 def_op 0x01 ; nop
     jmp vm.loop
 
+def_op 0x0c ; br
+    call imm.varuint32
+    mov vm.IP, eax
+    jmp vm.loop
+
+def_op 0x0d ; br_if
+    call imm.varuint32
+    S.pop ecx
+    cmp ecx, 0
+    jz vm.loop
+    mov vm.IP, eax
+    jmp vm.loop
+
 def_op 0x0f ; return
 op.ret:
     R.pop vm.IP
-    jmp op.jmp.check
+    jmp vm.loop
 
 def_op 0x10 ; call
     call imm.varuint32
     R.push vm.IP
+    cmp eax, 0
+    jl vm.call.builtin
     mov vm.IP, eax
-    jmp op.jmp.check
+    jmp vm.loop
 
 def_op 0x41 ; i32.const
     call imm.varint32
@@ -131,35 +146,6 @@ def_op.i32.binop 0x72, or ; i32.or
 def_op.i32.binop 0x73, xor ; i32.xor
 
 ; Legacy (pre-WASM) RS-3 opcodes
-def_op 0xf0 ; JMP        IP = S.pop()
-    S.pop vm.IP
-op.jmp.check:
-    cmp vm.IP, 0
-    jl op.jmp.builtin
-    jmp vm.loop
-
-op.jmp.builtin:
-    inc vm.IP ; 0xffff_ffff
-    jz vm.exit
-
-    inc vm.IP ; 0xffff_fffe
-    jnz op.jmp.builtin.undef
-
-    S.pop edx ; len
-    S.pop esi ; data
-    ; Clamp the length to the 32-bit address space.
-    add rdx, rsi
-    mov edx, edx
-    sub rdx, rsi
-    add rsi, vm.mem.base
-    call vm.print
-    jmp op.ret
-
-op.jmp.builtin.undef:
-    mov rsi, msg.undef_builtin
-    mov rdx, msg.undef_builtin.len
-    jmp vm.panic
-
 def_op 0xf1 ; CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
     ; Stack: [a, b, lt, eq, gt] <- SP
     add vm.SP, 4 * 4 ; Point SP to a
@@ -186,6 +172,33 @@ def_op 0xf3 ; SET        S[varuint32] = S.pop()
 op.ud:
     mov rsi, msg.undef_op
     mov rdx, msg.undef_op.len
+    jmp vm.panic
+
+vm.call.builtin:
+    inc eax ; 0xffff_ffff
+    jz vm.exit
+
+    inc eax ; 0xffff_fffe
+    jz vm.call.builtin.print
+
+    jmp vm.call.builtin.undef
+
+vm.call.builtin.print:
+    S.pop edx ; len
+    S.pop esi ; data
+    ; Clamp the length to the 32-bit address space.
+    add rdx, rsi
+    mov edx, edx
+    sub rdx, rsi
+    add rsi, vm.mem.base
+    call vm.print
+    jmp op.ret
+
+vm.call.builtin.undef:
+    mov rsi, msg.undef_builtin
+    mov rdx, msg.undef_builtin.len
+    jmp vm.panic
+
 vm.panic:
     call vm.print
     jmp vm.exit
@@ -223,6 +236,7 @@ start:
     mov r15, $$
 
 vm.loop:
+    ; TODO(eddyb) Check that vm.IP is within bounds.
     mov bl, [vm.IP.mem]
     inc vm.IP
     ; HACK(eddyb) Relative addressing - should figure out RIP-relative instead.
