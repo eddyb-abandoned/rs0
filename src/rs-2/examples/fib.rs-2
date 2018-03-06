@@ -13,9 +13,10 @@ fn main
         add 1
 
         ; (a, b) = (b, a + b)
-        push b
+        get b
         add a, b
-        pop a, b
+        set b
+        set a
     while i, lt, 100
 
     call sys.print, "\n"
@@ -32,16 +33,16 @@ fn print.dec, x
     jmp.if x, ge, 0, print.dec.positive
         call sys.print, "-"
         mul x, -1
-        pop x
+        set x
     print.dec.positive:
 
     ; d = x % 10
     rem_u x, 10
-    pop d
+    set d
 
     ; x = x / 10
     div_u x, 10
-    pop x
+    set x
 
     jmp.if x, le, 0, print.dec.digit
         call print.dec, x
@@ -50,7 +51,7 @@ fn print.dec, x
     ; print(digits[d..][..1])
     const8 digits, "0123456789"
     add d, digits
-    pop d
+    set d
     call sys.print, d, 1
 
     ; Cleanup local variables

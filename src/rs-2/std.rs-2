@@ -163,15 +163,17 @@ def_op rem_u,0x70, 2 - 1
 ; Legacy (pre-WASM) RS-3 opcodes
 def_op cmp,  0xf1, 5 - 1
 
-macro get n {
+macro get x {
+    assert sys.stack.is_var#x eqtype "yes"
     db 0xf2
-    varuint32 n
+    varuint32 sys.stack.depth - (sys.stack.var#x)
     sys.stack.add 1
 }
-macro set n {
+macro set x {
+    assert sys.stack.is_var#x eqtype "yes"
     sys.stack.add -1
     db 0xf3
-    varuint32 n
+    varuint32 sys.stack.depth - (sys.stack.var#x)
 }
 
 ; Constants and variables.
@@ -192,16 +194,9 @@ macro push [x] {
         i32.const str
         i32.const str.len
     else if sys.stack.is_var#x eqtype "yes"
-        get sys.stack.depth - (sys.stack.var#x)
+        get x
     else
         i32.const x
-    end if
-}
-
-macro pop [x] { reverse
-    if x eq
-    else if sys.stack.is_var#x eqtype "yes"
-        set sys.stack.depth - (sys.stack.var#x)
     end if
 }
 
