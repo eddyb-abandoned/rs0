@@ -80,10 +80,6 @@ sys.exit  = 0xffffffff
 ; Stack management.
 sys.stack.depth = 0
 macro sys.stack.add n { sys.stack.depth = sys.stack.depth + n }
-macro sys.stack.display {
-    display_hex8 sys.stack.depth
-    display ": "
-}
 
 ; LEB128
 macro varuint32 x {
@@ -123,34 +119,14 @@ macro varint32 x {
 
 ; Basic opcodes.
 macro i32.const x {
-    sys.stack.display
-    display "i32.const ", 10
     db 0x41
     varint32 x
     sys.stack.add 1
 }
 
-macro display_hex8 x {
-    if x < 0
-        display '-'
-        y = -(x)
-    else
-        y = x
-    end if
-    repeat 2
-        d = '0' + y shr (8-%*4) and 0Fh
-        if d > '9'
-            d = d + 'A'-'9'-1
-        end if
-        display d
-    end repeat
-}
-
 macro def_op name, opcode, diff {
     macro name [args] \{ common
         push args
-        sys.stack.display
-        display `name, 10
         db opcode
         sys.stack.add -(diff)
     \}
@@ -173,19 +149,11 @@ def_op jmp,  0xf0, 1 - 0
 def_op cmp,  0xf1, 5 - 1
 
 macro get n {
-    sys.stack.display
-    display "get "
-    display_hex8 n
-    display 10
     db 0xf2
     varuint32 n
     sys.stack.add 1
 }
 macro set n {
-    sys.stack.display
-    display "set "
-    display_hex8 n
-    display 10
     sys.stack.add -1
     db 0xf3
     varuint32 n
@@ -224,9 +192,6 @@ macro pop [x] { reverse
 
 macro let name, value {
     push value
-    sys.stack.display
-    display "let "#`name
-    display 10
     sys.stack.var#name = sys.stack.depth
     sys.stack.is_var#name equ "yes"
 }
