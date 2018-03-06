@@ -126,8 +126,8 @@ macro def_op name, opcode, diff {
     \}
 }
 
-def_op trap,0x00, 0 - 0
-def_op nop, 0x01, 0 - 0
+def_op trap,    0x00, 0 - 0
+def_op nop,     0x01, 0 - 0
 macro br target {
     db 0x0c
     varuint32 target
@@ -137,7 +137,7 @@ macro br_if target {
     varuint32 target
     sys.stack.add -1
 }
-def_op return,0x0f, 0 - 0
+def_op return,  0x0f, 0 - 0
 macro call f, [args] { common
     local d
     d = sys.stack.depth
@@ -146,23 +146,33 @@ macro call f, [args] { common
     varuint32 f
     sys.stack.depth = d
 }
-def_op drop, 0x1a, 1 - 0
+def_op drop,    0x1a, 1 - 0
 macro i32.const x {
     db 0x41
     varint32 x
     sys.stack.add 1
 }
-def_op add,  0x6a, 2 - 1
-def_op sub,  0x6b, 2 - 1
-def_op mul,  0x6c, 2 - 1
-def_op div_s,0x6d, 2 - 1
-def_op div_u,0x6e, 2 - 1
-def_op rem_s,0x6f, 2 - 1
-def_op rem_u,0x70, 2 - 1
+
+def_op cmp.eqz, 0x45, 1 - 1
+def_op cmp.eq,  0x46, 2 - 1
+def_op cmp.ne,  0x47, 2 - 1
+def_op cmp.lt_s,0x48, 2 - 1
+def_op cmp.lt_u,0x49, 2 - 1
+def_op cmp.gt_s,0x4a, 2 - 1
+def_op cmp.ge_u,0x4b, 2 - 1
+def_op cmp.le_s,0x4c, 2 - 1
+def_op cmp.le_u,0x4d, 2 - 1
+def_op cmp.ge_s,0x4e, 2 - 1
+def_op cmp.ge_u,0x4f, 2 - 1
+def_op add,     0x6a, 2 - 1
+def_op sub,     0x6b, 2 - 1
+def_op mul,     0x6c, 2 - 1
+def_op div_s,   0x6d, 2 - 1
+def_op div_u,   0x6e, 2 - 1
+def_op rem_s,   0x6f, 2 - 1
+def_op rem_u,   0x70, 2 - 1
 
 ; Legacy (pre-WASM) RS-3 opcodes
-def_op cmp,  0xf1, 5 - 1
-
 macro get x {
     assert sys.stack.is_var#x eqtype "yes"
     db 0xf2
@@ -235,7 +245,7 @@ macro loop {
 }
 
 macro while [cond] { common
-    jmp.if cond, sys.fn.loop
+    br_if sys.fn.loop
     restore sys.fn.loop
 }
 
@@ -248,25 +258,6 @@ macro const8 name, [xs] { common
 
     section "vm.code" align 1
     org sys.code.pos
-}
-
-macro jmp.if a, cc, b, target {
-    push a, b
-    if cc eq lt
-        cmp 1, 0, 0
-    else if cc eq gt
-        cmp 0, 0, 1
-    else if cc eq ge
-        cmp 0, 1, 1
-    else if cc eq le
-        cmp 1, 1, 0
-    else if cc eq ne
-        cmp 1, 0, 1
-    else
-        display "Unknown condition code", 10
-        assert 0
-    end if
-    br_if target
 }
 
 ; Set up data and code sections.

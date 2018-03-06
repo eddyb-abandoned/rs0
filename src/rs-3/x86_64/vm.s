@@ -107,6 +107,35 @@ def_op 0x41 ; i32.const
     S.push eax
     jmp vm.loop
 
+def_op 0x45 ; i32.eqz
+    xor ecx, ecx
+    cmp dword [vm.SP], 0
+    setz cl
+    mov [vm.SP], ecx
+    jmp vm.loop
+
+; S.push(cmp(S.pop(), S.pop()).cc)
+macro def_op.i32.cmp opcode, cc {
+    def_op opcode
+        S.pop eax
+        xor ecx, ecx
+        cmp [vm.SP], eax
+        set#cc cl
+        mov [vm.SP], ecx
+        jmp vm.loop
+}
+
+def_op.i32.cmp 0x46, e ; i32.eq
+def_op.i32.cmp 0x47, ne ; i32.ne
+def_op.i32.cmp 0x48, l ; i32.lt_s
+def_op.i32.cmp 0x49, b ; i32.lt_u
+def_op.i32.cmp 0x4a, g ; i32.gt_s
+def_op.i32.cmp 0x4b, ae ; i32.ge_u
+def_op.i32.cmp 0x4c, le ; i32.le_s
+def_op.i32.cmp 0x4d, be ; i32.le_u
+def_op.i32.cmp 0x4e, ge ; i32.ge_s
+def_op.i32.cmp 0x4f, ae ; i32.ge_u
+
 ; S.push(f(S.pop(), S.pop()))
 macro def_op.i32.binop opcode, op {
     def_op opcode
@@ -150,17 +179,6 @@ def_op.i32.binop 0x72, or ; i32.or
 def_op.i32.binop 0x73, xor ; i32.xor
 
 ; Legacy (pre-WASM) RS-3 opcodes
-def_op 0xf1 ; CMP        S.push([S.pop(), S.pop(), S.pop()][S.pop().cmp(S.pop())])
-    ; Stack: [a, b, lt, eq, gt] <- SP
-    add vm.SP, 4 * 4 ; Point SP to a
-    mov eax, [vm.SP]
-    cmp eax, [vm.SP-4] ; a, b
-    cmovl eax, [vm.SP-2*4] ; lt
-    cmove eax, [vm.SP-3*4] ; eq
-    cmovg eax, [vm.SP-4*4] ; gt
-    mov [vm.SP], eax
-    jmp vm.loop
-
 def_op 0xf2 ; GET        S.push(S[varuint32])
     call imm.varuint32
     mov eax, [vm.SP + rax * 4]

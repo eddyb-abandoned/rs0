@@ -17,7 +17,9 @@ fn main
         add a, b
         set b
         set a
-    while i, lt, 100
+
+        cmp.lt_u i, 100
+    while
 
     call sys.print, "\n"
 
@@ -30,7 +32,8 @@ endfn
 fn print.dec, x
     let d, 0
 
-    jmp.if x, ge, 0, print.dec.positive
+    cmp.ge_s x, 0
+    br_if print.dec.positive
         call sys.print, "-"
         mul x, -1
         set x
@@ -44,7 +47,8 @@ fn print.dec, x
     div_u x, 10
     set x
 
-    jmp.if x, le, 0, print.dec.digit
+    cmp.eqz x
+    br_if print.dec.digit
         call print.dec, x
     print.dec.digit:
 
