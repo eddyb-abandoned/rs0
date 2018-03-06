@@ -1,8 +1,10 @@
-TARGET := x86_64-linux
+ARCH = x86_64
+OS = linux
+TARGET := $(ARCH)-$(OS)
 LDFLAGS := -T src/rs-3/$(TARGET)/link.ld -z max-page-size=0x1000 -s
 OUT := target/$(TARGET)
 
-$(OUT)/rs-3/%.o: src/rs-3/$(TARGET)/%.s
+$(OUT)/rs-3/vm.o: src/rs-3/$(TARGET)/vm.s src/rs-3/$(ARCH)/vm.s
 	@mkdir -p $(dir $@)
 	@echo "Assembling \`$<\`"
 	@fasm $< $@
