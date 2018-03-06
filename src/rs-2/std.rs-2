@@ -118,12 +118,6 @@ macro varint32 x {
 }
 
 ; Basic opcodes.
-macro i32.const x {
-    db 0x41
-    varint32 x
-    sys.stack.add 1
-}
-
 macro def_op name, opcode, diff {
     macro name [args] \{ common
         push args
@@ -151,6 +145,12 @@ macro call f, [args] { common
     db 0x10
     varuint32 f
     sys.stack.depth = d
+}
+def_op drop, 0x1a, 1 - 0
+macro i32.const x {
+    db 0x41
+    varint32 x
+    sys.stack.add 1
 }
 def_op add,  0x6a, 2 - 1
 def_op sub,  0x6b, 2 - 1
@@ -272,12 +272,6 @@ macro jmp.if a, cc, b, target {
         assert 0
     end if
     br_if target
-}
-
-macro drop { ; a, b -> a
-    get 0    ; a, b    -> a, b, b
-    sub      ; a, b, b -> a, 0
-    add      ; a, 0,   -> a
 }
 
 ; Set up data and code sections.

@@ -98,6 +98,10 @@ def_op 0x10 ; call
     mov vm.IP, eax
     jmp vm.loop
 
+def_op 0x1a ; drop
+    S.pop eax
+    jmp vm.loop
+
 def_op 0x41 ; i32.const
     call imm.varint32
     S.push eax
